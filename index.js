@@ -1,18 +1,6 @@
 var Service, Characteristic, TargetDoorState, CurrentDoorState;
 const { execSync, exec } = require('child_process');
 
-// Detect gpiod syntax by probing with actual commands.
-// v2 syntax: gpioget -c <chip> <pin>
-// v1 syntax: gpioget <chip> <pin>
-function detectGpiodV2(chip, pin) {
-    try {
-        execSync(`gpioget -c ${chip} ${pin}`, { timeout: 2000, stdio: 'pipe' });
-        return true;  // v2 syntax worked
-    } catch (e) {
-        return false; // fall back to v1
-    }
-}
-
 // Auto-detect the GPIO chip that represents the 40-pin header.
 // Pi 4 -> gpiochip0 [pinctrl-bcm2711], Pi 5 -> gpiochip4 [pinctrl-rp1]
 function detectGpioChip(log) {
@@ -25,7 +13,6 @@ function detectGpioChip(log) {
                 if (m) return m[1];
             }
         }
-        // Fallback: return the first chip listed
         var first = lines[0] && lines[0].match(/^(gpiochip\d+)/);
         return first ? first[1] : 'gpiochip0';
     } catch (e) {
@@ -58,6 +45,9 @@ function GarageDoorOpener(log, config) {
     this.duration = defaultVal(config["duration_ms"], 500);
     this.pullConfig = defaultVal(config["input_pull"], "none");
     this.gpiochip = defaultVal(config["gpiochip"], null); // null = auto-detect
+    // legacyGpiod: set true only on Pi 4 / older systems with gpiod v1
+    // Pi 5 / Bookworm always has gpiod v2 (default)
+    this.legacyGpiod = defaultVal(config["legacyGpiod"], false);
     this.doorState = 0;
     this.sensorChange = 0;
     this.service = null;
@@ -71,13 +61,12 @@ function GarageDoorOpener(log, config) {
         this.log("Auto-detected GPIO chip: %s", this.gpiochip);
     }
 
-    this.gpiodV2 = detectGpiodV2(this.gpiochip, this.doorSensorPin);
-    this.log("gpiod version: %s  chip: %s  sensor cmd: %s",
-        this.gpiodV2 ? 'v2+' : 'v1',
+    this.log("gpiod syntax: %s  chip: %s  sensor cmd: %s",
+        this.legacyGpiod ? 'v1 (legacy)' : 'v2 (default)',
         this.gpiochip,
-        this.gpiodV2
-            ? `gpioget -c ${this.gpiochip} ${this.doorSensorPin}`
-            : `gpioget ${this.gpiochip} ${this.doorSensorPin}`
+        this.legacyGpiod
+            ? `gpioget ${this.gpiochip} ${this.doorSensorPin}`
+            : `gpioget -c ${this.gpiochip} ${this.doorSensorPin}`
     );
 
     this.log("Creating a garage door relay named '%s', initial state: %s", this.name, (this.invertDoorState ? "OPEN" : "CLOSED"));
@@ -149,12 +138,11 @@ GarageDoorOpener.prototype.checkSensor = function (callback) {
 
 GarageDoorOpener.prototype.readSensorState = function () {
     try {
-        var cmd = this.gpiodV2
-            ? `gpioget -c ${this.gpiochip} ${this.doorSensorPin}`
-            : `gpioget ${this.gpiochip} ${this.doorSensorPin}`;
+        var cmd = this.legacyGpiod
+            ? `gpioget ${this.gpiochip} ${this.doorSensorPin}`
+            : `gpioget -c ${this.gpiochip} ${this.doorSensorPin}`;
         var output = execSync(cmd, { timeout: 1000 }).toString().trim();
-        // gpiod v2 outputs '"23"=active' or '"23"=inactive'; v1 outputs '0' or '1'
-        // Use substring checks to handle all formats
+        // v2 outputs '"23"=active' or '"23"=inactive'; v1 outputs '0' or '1'
         var raw;
         if (output.includes('inactive')) raw = 0;
         else if (output.includes('active')) raw = 1;
@@ -174,9 +162,9 @@ GarageDoorOpener.prototype.setState = function (activate) {
     var ms = this.duration > 0 ? this.duration : 500;
     // v2: gpioset -t <ms>ms -c <chip> <pin>=<val>
     // v1: gpioset -m time -u <us> <chip> <pin>=<val>
-    var cmd = this.gpiodV2
-        ? `gpioset -t ${ms}ms -c ${this.gpiochip} ${this.doorRelayPin}=${gpioVal}`
-        : `gpioset -m time -u ${ms * 1000} ${this.gpiochip} ${this.doorRelayPin}=${gpioVal}`;
+    var cmd = this.legacyGpiod
+        ? `gpioset -m time -u ${ms * 1000} ${this.gpiochip} ${this.doorRelayPin}=${gpioVal}`
+        : `gpioset -t ${ms}ms -c ${this.gpiochip} ${this.doorRelayPin}=${gpioVal}`;
     exec(cmd, { timeout: ms + 5000 }, (err) => {
         if (err && !err.killed) this.log.error('gpioset relay error: ' + err.message.split('\n')[0]);
     });
