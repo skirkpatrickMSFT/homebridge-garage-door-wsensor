@@ -11,11 +11,8 @@ Compatible with **Homebridge 1.x** and **Homebridge 2.0**.
 - Raspberry Pi (any model with GPIO, including **Pi 5**)
 - Node.js >= 18
 - Homebridge >= 1.1.7 (including 2.0)
-- `raspi-gpio` — pre-installed on all Raspberry Pi OS versions (no extra install needed)
 - A relay module wired to a GPIO output pin
 - (Optional) A magnetic reed sensor or similar wired to a GPIO input pin
-
-> **No native npm dependencies.** This plugin uses only Node.js built-ins and the `raspi-gpio` command already present on your Pi. There is nothing to compile.
 
 ---
 
@@ -36,6 +33,8 @@ npm install -g homebridge-garage-door-wsensor
 ```bash
 cd /var/lib/homebridge/node_modules
 sudo git clone https://github.com/skirkpatrickMSFT/homebridge-garage-door-wsensor.git
+cd homebridge-garage-door-wsensor
+sudo npm install
 sudo hb-service restart
 ```
 
@@ -44,10 +43,9 @@ To update to the latest version from GitHub later:
 ```bash
 cd /var/lib/homebridge/node_modules/homebridge-garage-door-wsensor
 sudo git pull
+sudo npm install
 sudo hb-service restart
 ```
-
-> No `npm install` needed — this plugin has zero npm dependencies.
 
 ### Option 4: Install from a local copy
 
