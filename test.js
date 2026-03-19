@@ -8,24 +8,25 @@
 
 const Module = require('module');
 
-// ─── Mock onoff (intercept before Node tries to resolve the native module) ────
+// ─── Mock child_process (no native GPIO needed) ──────────────────────────────
 let lastRelayWrite = null;
 let mockSensorReading = 1; // 1 = closed
 
-class MockGpio {
-    constructor(pin, direction, edge, opts) {
-        this._pin = pin;
-        this._direction = direction;
-        this._value = 0;
+const mockChildProcess = {
+    execSync: (cmd) => {
+        if (cmd.startsWith('raspi-gpio get')) {
+            return Buffer.from('GPIO 8: level=' + mockSensorReading + ' fsel=0 alt= func=INPUT pull=UP');
+        }
+        if (cmd.startsWith('raspi-gpio set')) {
+            lastRelayWrite = cmd;
+        }
+        return Buffer.from('');
     }
-    writeSync(val) { lastRelayWrite = val; this._value = val; }
-    readSync()     { return mockSensorReading; }
-    unexport()     {}
-}
+};
 
 const _originalLoad = Module._load;
 Module._load = function (request, parent, isMain) {
-    if (request === 'onoff') return { Gpio: MockGpio };
+    if (request === 'child_process') return mockChildProcess;
     return _originalLoad.apply(this, arguments);
 };
 
