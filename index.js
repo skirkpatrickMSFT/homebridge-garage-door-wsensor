@@ -126,7 +126,8 @@ GarageDoorOpener.prototype.checkSensor = function (callback) {
     setTimeout(() => {
         this.doorState = this.readSensorState();
         if (this.service && this.doorState !== this.sensorChange) {
-            this.service.getCharacteristic(TargetDoorState).updateValue(this.doorState);
+            // Only update CurrentDoorState - updating TargetDoorState triggers the onSet
+            // handler which would fire the relay
             this.service.getCharacteristic(CurrentDoorState).updateValue(this.doorState);
             this.sensorChange = this.doorState;
         }
