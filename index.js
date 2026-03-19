@@ -172,25 +172,14 @@ GarageDoorOpener.prototype.setState = function (activate) {
 
 // Homebridge 1.x: callback-based set handler
 GarageDoorOpener.prototype.setDoorState = function (newState, callback) {
-    var nowState = this.readSensorState();
-    this.log("Requesting new state %s, current state %s", newState, nowState);
-    if (newState == nowState) {
-        this.log("Already in requested state, doing nothing.");
-        callback(null);
-        return;
-    }
+    this.log("Requesting new state %s, current state %s", newState, this.readSensorState());
     this.setState(1);
     callback(null);
 }
 
 // Homebridge 2.0: promise-based set handler
 GarageDoorOpener.prototype.setDoorStateAsync = function (newState) {
-    var nowState = this.readSensorState();
-    this.log("Requesting new state %s, current state %s", newState, nowState);
-    if (newState == nowState) {
-        this.log("Already in requested state, doing nothing.");
-        return Promise.resolve();
-    }
+    this.log("Requesting new state %s, current state %s", newState, this.readSensorState());
     this.setState(1);
     return Promise.resolve();
 }
@@ -202,7 +191,7 @@ GarageDoorOpener.prototype.gpioSensorVal = function (val) {
 
 GarageDoorOpener.prototype.gpioDoorVal = function (val) {
     if (this.invertDoorState) val = !val;
-    return val ? 0 : 1; // reversed logic
+    return val ? 1 : 0;
 }
 
 var is_int = function (n) {
