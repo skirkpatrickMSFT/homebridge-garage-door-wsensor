@@ -13,7 +13,8 @@ Compatible with **Homebridge 1.x** and **Homebridge 2.0**.
 - Homebridge >= 1.1.7 (including 2.0)
 - **`gpiod` system package** — install with: `sudo apt install gpiod`
   - Provides `gpioget` and `gpioset` which this plugin uses for GPIO access
-  - Works on all Pi models including Pi 5 (uses `/dev/gpiochip0`, not legacy sysfs)
+  - Works on all Pi models including Pi 5 (uses `/dev/gpiochip*` character device, not legacy sysfs)
+  - **Raspberry Pi 5 note:** gpiod is pre-installed on Raspberry Pi OS Bookworm — no extra install step needed
 - A relay module wired to a GPIO output pin
 - (Optional) A magnetic reed sensor or similar wired to a GPIO input pin
 
@@ -77,7 +78,7 @@ Add the following to the `accessories` array in your Homebridge `config.json` (u
 }
 ```
 
-> **Note:** `doorRelayPin` and `doorSensorPin` use **BCM GPIO numbers** — not physical board pin numbers. See the [GPIO Pin Map](#gpio-pin-map-physical-board-vs-bcm-pigpio) section below to find your BCM number.
+> **Note:** `doorRelayPin` and `doorSensorPin` use **BCM GPIO numbers** — not physical board pin numbers. See the [GPIO Pin Map](#gpio-pin-map-physical-board-vs-bcm) section below to find your BCM number.
 
 Example of where it fits inside `config.json`:
 
@@ -107,11 +108,34 @@ Example of where it fits inside `config.json`:
 | `name`             | string  | Yes      | —       | Name of the accessory as it appears in HomeKit |
 | `doorRelayPin`     | integer | Yes      | —       | **BCM** GPIO number connected to the relay (see pin map below) |
 | `doorSensorPin`    | integer | Yes      | —       | **BCM** GPIO number connected to the door sensor (see pin map below) |
-| `duration_ms`      | integer | No       | `0`     | How long (in milliseconds) to hold the relay closed. Set to `0` to hold indefinitely |
+| `duration_ms`      | integer | No       | `500`   | How long (in milliseconds) to pulse the relay. `500` is a safe default for most garage openers |
 | `invertDoorState`  | boolean | No       | `false` | Invert the relay output logic (HIGH/LOW) for the door |
 | `invertSensorState`| boolean | No       | `false` | Invert the sensor reading logic |
 | `input_pull`       | string  | No       | `"none"`| Pull resistor for sensor pin: `"up"`, `"down"`, or `"none"` (configured via `pinctrl`) |
-| `gpiochip`         | string  | No       | `"gpiochip0"` | GPIO chip device. Pi 4 = `"gpiochip0"`, Pi 5 may need `"gpiochip4"` — run `gpioinfo` to check |
+| `gpiochip`         | string  | No       | auto    | GPIO chip device. Auto-detected at startup (Pi 4 = `gpiochip0`, Pi 5 = `gpiochip4`). Override only if auto-detection fails |
+
+---
+
+## Raspberry Pi 5 Notes
+
+The Pi 5 uses the **RP1** I/O controller which breaks compatibility with older GPIO libraries (e.g. `rpio`, `pigpio`, `onoff`). This plugin works correctly on Pi 5 because it uses the `gpiod` command-line tools which support the modern `/dev/gpiochip*` interface.
+
+**Key differences on Pi 5:**
+
+| | Pi 4 | Pi 5 |
+|---|---|---|
+| GPIO chip | `gpiochip0` | `gpiochip4` |
+| GPIO interface | `/sys/class/gpio` or `/dev/gpiochip0` | `/dev/gpiochip4` only (sysfs removed) |
+| gpiod version | v1 (Bullseye) or v2 (Bookworm) | v2 (Bookworm) |
+| Pull resistors | `raspi-gpio` or `pigpio` | `pinctrl` |
+
+This plugin auto-detects all of the above at startup. You'll see log lines like:
+```
+[Garage Door] Auto-detected GPIO chip: gpiochip4
+[Garage Door] gpiod version: v2+
+```
+
+If auto-detection picks the wrong chip, add `"gpiochip": "gpiochip4"` to your config to force it.
 
 ---
 
@@ -223,8 +247,9 @@ sudo journalctl -fu homebridge
 - **Relay fires but door doesn't move** — Check your wiring and try toggling `invertDoorState`.
 - **Sensor always shows wrong state** — Try toggling `invertSensorState` or changing `input_pull`.
 - **Permission denied on GPIO** — Run Homebridge as root or add the user to the `gpio` and `dialout` groups: `sudo usermod -aG gpio,dialout $USER`. The `gpiod` tools typically require either root or membership in the `gpio` group.
-- **Wrong chip number** — If GPIO doesn't work, run `gpioinfo` on the Pi to list available chips. Pi 5 users may need `"gpiochip": "gpiochip4"` in config.
-- **`gpioget: command not found`** — Install the gpiod tools: `sudo apt install gpiod`
+- **Wrong chip number** — Run `gpiodetect` on the Pi to list available chips. Pi 5 reports `gpiochip4 [pinctrl-rp1]`. Force it with `"gpiochip": "gpiochip4"` in your config.
+- **`gpioget: command not found`** — Install the gpiod tools: `sudo apt install gpiod` (usually pre-installed on Bookworm/Pi 5).
+- **Pin numbering** — Always use **BCM** numbers, not physical board pin numbers. Physical pin 16 = BCM 23, physical pin 24 = BCM 8.
 
 ---
 
