@@ -1,5 +1,5 @@
 var Service, Characteristic, TargetDoorState, CurrentDoorState;
-const { Gpio } = require('pigpio');
+const { Gpio } = require('onoff');
 
 module.exports = function (homebridge) {
     Service = homebridge.hap.Service;
@@ -34,12 +34,17 @@ function GarageDoorOpener(log, config) {
 
     this.log("Creating a garage door relay named '%s', initial state: %s", this.name, (this.invertDoorState ? "OPEN" : "CLOSED"));
 
-    this.relayGpio = new Gpio(this.doorRelayPin, { mode: Gpio.OUTPUT });
-    this.relayGpio.digitalWrite(this.gpioDoorVal(this.invertDoorState));
+    this.relayGpio = new Gpio(this.doorRelayPin, 'out');
+    this.relayGpio.writeSync(this.gpioDoorVal(this.invertDoorState));
 
-    this.sensorGpio = new Gpio(this.doorSensorPin, {
-        mode: Gpio.INPUT,
-        pullUpDown: this.translatePullConfig(this.pullConfig)
+    this.sensorGpio = new Gpio(this.doorSensorPin, 'in', 'both', {
+        bias: this.translatePullConfig(this.pullConfig)
+    });
+
+    // Clean up GPIO on process exit
+    process.on('exit', () => {
+        this.relayGpio.unexport();
+        this.sensorGpio.unexport();
     });
 
     this.checkSensor(e => {});
@@ -98,13 +103,13 @@ GarageDoorOpener.prototype.checkSensor = function (callback) {
 }
 
 GarageDoorOpener.prototype.readSensorState = function () {
-    var raw = this.sensorGpio.digitalRead();
+    var raw = this.sensorGpio.readSync();
     var val = this.gpioSensorVal(raw);
     return val === 1 ? 1 : 0; // closed / opened
 }
 
 GarageDoorOpener.prototype.setState = function (val) {
-    this.relayGpio.digitalWrite(this.gpioDoorVal(val));
+    this.relayGpio.writeSync(this.gpioDoorVal(val));
 }
 
 // Homebridge 1.x: callback-based set handler
@@ -170,9 +175,9 @@ GarageDoorOpener.prototype.gpioDoorVal = function (val) {
 }
 
 GarageDoorOpener.prototype.translatePullConfig = function (val) {
-    if (val == "up") return Gpio.PUD_UP;
-    else if (val == "down") return Gpio.PUD_DOWN;
-    else return Gpio.PUD_OFF;
+    if (val == "up") return 'pull-up';
+    else if (val == "down") return 'pull-down';
+    else return 'disable';
 }
 
 var is_int = function (n) {

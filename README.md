@@ -8,8 +8,8 @@ Compatible with **Homebridge 1.x** and **Homebridge 2.0**.
 
 ## Requirements
 
-- Raspberry Pi (any model with GPIO)
-- Node.js >= 14.15.3
+- Raspberry Pi (any model with GPIO, including **Pi 5**)
+- Node.js >= 18
 - Homebridge >= 1.1.7 (including 2.0)
 - A relay module wired to a GPIO output pin
 - (Optional) A magnetic reed sensor or similar wired to a GPIO input pin
