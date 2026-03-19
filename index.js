@@ -48,10 +48,11 @@ function GarageDoorOpener(log, config) {
     // legacyGpiod: set true only on Pi 4 / older systems with gpiod v1
     // Pi 5 / Bookworm always has gpiod v2 (default)
     this.legacyGpiod = defaultVal(config["legacyGpiod"], false);
-    this.doorState = 0;
+    this.doorState = 0;       // current physical state from sensor
+    this.targetState = 0;     // desired state from HomeKit commands
     this.sensorChange = 0;
     this.service = null;
-    this.relayLastFired = 0; // timestamp of last relay activation (ms)
+    this.relayLastFired = 0;
 
     if (!this.doorRelayPin) throw new Error("You must provide a config value for 'doorRelayPin'.");
     if (!this.doorSensorPin) throw new Error("You must provide a config value for 'doorSensorPin'.");
@@ -96,17 +97,20 @@ GarageDoorOpener.prototype.getServices = function () {
     // Homebridge 2.0 uses onGet/onSet (promise-based); 1.x uses on('get')/on('set') (callback-based)
     if (typeof currentDoorChar.onGet === 'function') {
         // Homebridge 2.0 style
+        // CurrentDoorState: reads physical sensor
+        // TargetDoorState: returns stored target (NOT sensor) to prevent HomeKit
+        //   re-sending setTarget when sensor state changes
         currentDoorChar
             .onGet(this.getSensorStatusAsync.bind(this));
         targetDoorChar
-            .onGet(this.getSensorStatusAsync.bind(this))
+            .onGet(() => Promise.resolve(this.targetState))
             .onSet(this.setDoorStateAsync.bind(this));
     } else {
         // Homebridge 1.x style
         currentDoorChar
             .on('get', this.getSensorStatus.bind(this));
         targetDoorChar
-            .on('get', this.getSensorStatus.bind(this))
+            .on('get', (cb) => cb(null, this.targetState))
             .on('set', this.setDoorState.bind(this));
     }
 
@@ -181,14 +185,16 @@ GarageDoorOpener.prototype.setState = function (activate) {
 
 // Homebridge 1.x: callback-based set handler
 GarageDoorOpener.prototype.setDoorState = function (newState, callback) {
-    this.log("Requesting new state %s, current state %s", newState, this.readSensorState());
+    this.targetState = newState;
+    this.log("Relay triggered: target=%s current=%s", newState, this.readSensorState());
     this.setState(1);
     callback(null);
 }
 
 // Homebridge 2.0: promise-based set handler
 GarageDoorOpener.prototype.setDoorStateAsync = function (newState) {
-    this.log("Requesting new state %s, current state %s", newState, this.readSensorState());
+    this.targetState = newState;
+    this.log("Relay triggered: target=%s current=%s", newState, this.readSensorState());
     this.setState(1);
     return Promise.resolve();
 }
