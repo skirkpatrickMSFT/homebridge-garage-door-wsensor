@@ -1,5 +1,5 @@
 var Service, Characteristic, TargetDoorState, CurrentDoorState;
-const { execSync } = require('child_process');
+const { Gpio } = require('onoff');
 
 module.exports = function (homebridge) {
     Service = homebridge.hap.Service;
@@ -34,13 +34,18 @@ function GarageDoorOpener(log, config) {
 
     this.log("Creating a garage door relay named '%s', initial state: %s", this.name, (this.invertDoorState ? "OPEN" : "CLOSED"));
 
-    // Configure relay pin as output
-    var initialRelayVal = this.gpioDoorVal(this.invertDoorState) ? 'dh' : 'dl';
-    execSync('raspi-gpio set ' + this.doorRelayPin + ' op ' + initialRelayVal);
+    this.relayGpio = new Gpio(this.doorRelayPin, 'out');
+    this.relayGpio.writeSync(this.gpioDoorVal(this.invertDoorState));
 
-    // Configure sensor pin as input with pull resistor
-    var pull = this.translatePullConfig(this.pullConfig);
-    execSync('raspi-gpio set ' + this.doorSensorPin + ' ip ' + pull);
+    this.sensorGpio = new Gpio(this.doorSensorPin, 'in', 'both', {
+        bias: this.translatePullConfig(this.pullConfig)
+    });
+
+    // Clean up GPIO on process exit
+    process.on('exit', () => {
+        this.relayGpio.unexport();
+        this.sensorGpio.unexport();
+    });
 
     this.checkSensor(e => {});
 }
@@ -98,22 +103,13 @@ GarageDoorOpener.prototype.checkSensor = function (callback) {
 }
 
 GarageDoorOpener.prototype.readSensorState = function () {
-    try {
-        var output = execSync('raspi-gpio get ' + this.doorSensorPin).toString();
-        // Output format: "GPIO N: level=X fsel=..."
-        var match = output.match(/level=(\d)/);
-        var raw = match ? parseInt(match[1]) : 0;
-        var val = this.gpioSensorVal(raw);
-        return val === 1 ? 1 : 0; // closed / opened
-    } catch (e) {
-        this.log('Error reading sensor pin: ' + e.message);
-        return 0;
-    }
+    var raw = this.sensorGpio.readSync();
+    var val = this.gpioSensorVal(raw);
+    return val === 1 ? 1 : 0; // closed / opened
 }
 
 GarageDoorOpener.prototype.setState = function (val) {
-    var level = this.gpioDoorVal(val) ? 'dh' : 'dl';
-    execSync('raspi-gpio set ' + this.doorRelayPin + ' op ' + level);
+    this.relayGpio.writeSync(this.gpioDoorVal(val));
 }
 
 // Homebridge 1.x: callback-based set handler
@@ -179,9 +175,9 @@ GarageDoorOpener.prototype.gpioDoorVal = function (val) {
 }
 
 GarageDoorOpener.prototype.translatePullConfig = function (val) {
-    if (val == "up") return 'pu';
-    else if (val == "down") return 'pd';
-    else return 'pn';
+    if (val == "up") return 'pull-up';
+    else if (val == "down") return 'pull-down';
+    else return 'disable';
 }
 
 var is_int = function (n) {
