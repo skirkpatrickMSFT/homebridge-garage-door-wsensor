@@ -3,7 +3,7 @@
   "version": "2.0.9",
   "description": "Homebridge plugin for Garage Door Opener - Raspberry Pi",
   "main": "index.js",
-  "author": "skirkpatrick88",
+  "author": "@skirkpatrick88",
   "license": "ISC",
   "keywords": [
     "homebridge-plugin",
@@ -12,17 +12,17 @@
     "homebridge"
   ],
   "engines": {
-    "node": "^18.20.4 || ^20.15.1 || ^22",
+    "node": ">=18.0.0",
     "homebridge": "^1.6.0 || ^2.0.0-beta.0"
   },
   "dependencies": {},
   "devDependencies": {},
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/plhyhc/homebridge-garage-door-wsensor.git"
+    "url": "git+https://github.com/skirkpatrickMSFT/homebridge-garage-door-wsensor.git"
   },
   "bugs": {
-    "url": "https://github.com/plhyhc/homebridge-garage-door-wsensor/issues"
+    "url": "https://github.com/skirkpatrickMSFT/homebridge-garage-door-wsensor/issues"
   },
   "homepage": "https://github.com/plhyhc/homebridge-garage-door-wsensor#readme"
 }

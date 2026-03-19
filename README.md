@@ -61,7 +61,7 @@ npm link
 
 ## Homebridge Configuration
 
-Add the following to the `accessories` section of your Homebridge `config.json`:
+Add the following to the `accessories` array in your Homebridge `config.json` (usually located at `/var/lib/homebridge/config.json`):
 
 ```json
 {
@@ -76,7 +76,28 @@ Add the following to the `accessories` section of your Homebridge `config.json`:
 }
 ```
 
-> **Note:** `doorRelayPin` and `doorSensorPin` must be **BCM GPIO numbers** (not physical board pin numbers). See the [GPIO Pin Map](#gpio-pin-map-physical-board-vs-bcm-pigpio) section below.
+> **Note:** `doorRelayPin` and `doorSensorPin` use **BCM GPIO numbers** — not physical board pin numbers. See the [GPIO Pin Map](#gpio-pin-map-physical-board-vs-bcm-pigpio) section below to find your BCM number.
+
+Example of where it fits inside `config.json`:
+
+```json
+{
+    "bridge": { ... },
+    "accessories": [
+        {
+            "accessory": "Garage Door Opener",
+            "name": "Garage Door",
+            "doorRelayPin": 8,
+            "doorSensorPin": 23,
+            "duration_ms": 500,
+            "invertDoorState": false,
+            "invertSensorState": false,
+            "input_pull": "up"
+        }
+    ],
+    "platforms": []
+}
+```
 
 ### Configuration Options
 
@@ -208,4 +229,4 @@ ISC
 
 ## Author
 
-skirkpatrick88
+[@skirkpatrick88](https://github.com/skirkpatrick88)
