@@ -11,6 +11,9 @@ Compatible with **Homebridge 1.x** and **Homebridge 2.0**.
 - Raspberry Pi (any model with GPIO, including **Pi 5**)
 - Node.js >= 18
 - Homebridge >= 1.1.7 (including 2.0)
+- **`gpiod` system package** — install with: `sudo apt install gpiod`
+  - Provides `gpioget` and `gpioset` which this plugin uses for GPIO access
+  - Works on all Pi models including Pi 5 (uses `/dev/gpiochip0`, not legacy sysfs)
 - A relay module wired to a GPIO output pin
 - (Optional) A magnetic reed sensor or similar wired to a GPIO input pin
 
@@ -107,7 +110,8 @@ Example of where it fits inside `config.json`:
 | `duration_ms`      | integer | No       | `0`     | How long (in milliseconds) to hold the relay closed. Set to `0` to hold indefinitely |
 | `invertDoorState`  | boolean | No       | `false` | Invert the relay output logic (HIGH/LOW) for the door |
 | `invertSensorState`| boolean | No       | `false` | Invert the sensor reading logic |
-| `input_pull`       | string  | No       | `"none"`| Internal pull resistor for sensor pin: `"up"`, `"down"`, or `"none"` |
+| `input_pull`       | string  | No       | `"none"`| Pull resistor for sensor pin: `"up"`, `"down"`, or `"none"` (configured via `pinctrl`) |
+| `gpiochip`         | string  | No       | `"gpiochip0"` | GPIO chip device. Pi 4 = `"gpiochip0"`, Pi 5 may need `"gpiochip4"` — run `gpioinfo` to check |
 
 ---
 
@@ -121,13 +125,14 @@ Example of where it fits inside `config.json`:
 - Connect one leg of the sensor to the GPIO pin specified by `doorSensorPin`.
 - Connect the other leg to ground (if using `input_pull: "up"`) or to 3.3V (if using `input_pull: "down"`).
 
-> **Important:** This plugin uses **pigpio**, which requires **BCM GPIO numbers** — NOT physical board pin numbers. Use the table below to find the correct value for your config.
+> **Important:** This plugin uses **BCM GPIO numbers** — NOT physical board pin numbers. Use the table below to find the correct value for your config.
+> GPIO is accessed via the `gpiod` system tools (`gpioget`/`gpioset`), which work on all Pi models including Pi 5.
 
 ### Migrating from rpio (old plugin version)?
 
 If you were previously using this plugin with `rpio`, your config used **physical board pin numbers**. You must convert them to BCM numbers:
 
-| Old rpio config value (physical pin) | New pigpio config value (BCM) |
+| Old rpio config value (physical pin) | New BCM config value |
 |:---:|:---:|
 | 11 | 17 |
 | 12 | 18 |
@@ -146,7 +151,7 @@ For any pin not listed, use the full GPIO Pin Map below.
 
 ---
 
-## GPIO Pin Map: Physical Board vs BCM (pigpio)
+## GPIO Pin Map: Physical Board vs BCM
 
 The Raspberry Pi header has 40 physical pins. Only the GPIO pins are usable — use the **BCM** column in your `config.json`.
 
@@ -217,7 +222,9 @@ sudo journalctl -fu homebridge
 - **"You must provide a config value for 'doorSensorPin'"** — Ensure `doorSensorPin` is set in your `config.json`.
 - **Relay fires but door doesn't move** — Check your wiring and try toggling `invertDoorState`.
 - **Sensor always shows wrong state** — Try toggling `invertSensorState` or changing `input_pull`.
-- **Permission denied on GPIO** — Run Homebridge as root or ensure the user is in the `gpio` group: `sudo usermod -aG gpio $USER`
+- **Permission denied on GPIO** — Run Homebridge as root or add the user to the `gpio` and `dialout` groups: `sudo usermod -aG gpio,dialout $USER`. The `gpiod` tools typically require either root or membership in the `gpio` group.
+- **Wrong chip number** — If GPIO doesn't work, run `gpioinfo` on the Pi to list available chips. Pi 5 users may need `"gpiochip": "gpiochip4"` in config.
+- **`gpioget: command not found`** — Install the gpiod tools: `sudo apt install gpiod`
 
 ---
 

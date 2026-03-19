@@ -3,33 +3,36 @@
  * Standalone compatibility test for homebridge-garage-door-wsensor.
  * Run with:  node test.js
  *
- * No npm install required. rpio and homebridge are fully mocked.
+ * No npm install required. child_process and homebridge are fully mocked.
  */
 
 const Module = require('module');
 
-// ─── Mock onoff (intercept before Node tries to resolve the native module) ────
-let lastRelayWrite = null;
-let mockSensorReading = 1; // 1 = closed
+// ─── Mock child_process (intercept before the plugin loads it) ────────────────
+let mockSensorReading = 1; // raw GPIO value: 1 = closed (with pull-up, sensor open = HIGH)
+let lastExecCmd = null;
+let lastExecSyncCmd = null;
 
-class MockGpio {
-    constructor(pin, direction, edge, opts) {
-        this._pin = pin;
-        this._direction = direction;
-        this._value = 0;
-    }
-    writeSync(val) { lastRelayWrite = val; this._value = val; }
-    readSync()     { return mockSensorReading; }
-    unexport()     {}
-}
+const mockChildProcess = {
+    execSync(cmd, opts) {
+        lastExecSyncCmd = cmd;
+        if (cmd.startsWith('gpioget')) return Buffer.from(String(mockSensorReading));
+        return Buffer.from('');
+    },
+    exec(cmd, opts, cb) {
+        lastExecCmd = cmd;
+        const callback = typeof opts === 'function' ? opts : cb;
+        if (callback) callback(null);
+    },
+};
 
 const _originalLoad = Module._load;
 Module._load = function (request, parent, isMain) {
-    if (request === 'onoff') return { Gpio: MockGpio };
+    if (request === 'child_process') return mockChildProcess;
     return _originalLoad.apply(this, arguments);
 };
 
-// Load the plugin (rpio will be intercepted above)
+// Load the plugin (child_process will be intercepted above)
 const pluginFactory = require('./index.js');
 
 // ─── Tiny test harness ────────────────────────────────────────────────────────
@@ -142,7 +145,7 @@ function makeHomebridgeMock(supportsHB2) {
 
 // ─── Test config ──────────────────────────────────────────────────────────────
 const BASE_CONFIG = { name: 'Test Garage', doorRelayPin: 11, doorSensorPin: 13, duration_ms: 0 };
-const mockLog = () => {};
+const mockLog = Object.assign(() => {}, { warn: () => {}, error: () => {} });
 
 // ─────────────────────────────────────────────────────────────────────────────
 async function runTests() {

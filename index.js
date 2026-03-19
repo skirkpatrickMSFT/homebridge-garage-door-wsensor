@@ -1,5 +1,7 @@
 var Service, Characteristic, TargetDoorState, CurrentDoorState;
-const { Gpio } = require('onoff');
+const { execSync, exec } = require('child_process');
+
+const GPIO_CHIP = 'gpiochip0';
 
 module.exports = function (homebridge) {
     Service = homebridge.hap.Service;
@@ -11,22 +13,23 @@ module.exports = function (homebridge) {
 }
 
 // NOTE: doorRelayPin and doorSensorPin must be BCM GPIO numbers (not physical board pin numbers)
+// Requires: sudo apt install gpiod  (provides gpioget/gpioset - works on Pi 5)
 function GarageDoorOpener(log, config) {
     this.log = log;
     this.name = config.name;
     this.doorRelayPin = config.doorRelayPin;
     this.doorSensorPin = config.doorSensorPin;
-    this.currentDoorState = CurrentDoorState.CLOSED;
-    this.targetDoorState = TargetDoorState.CLOSED;
+    this.currentDoorState = 0;
+    this.targetDoorState = 0;
     this.invertDoorState = defaultVal(config["invertDoorState"], false);
     this.invertSensorState = defaultVal(config['invertSensorState'], false);
     this.default = defaultVal(config["default_state"], false);
-    this.duration = defaultVal(config["duration_ms"], 0);
+    this.duration = defaultVal(config["duration_ms"], 500);
     this.pullConfig = defaultVal(config["input_pull"], "none");
+    this.gpiochip = defaultVal(config["gpiochip"], GPIO_CHIP);
     this.doorState = 0;
     this.sensorChange = 0;
     this.service = null;
-    this.timerid = -1;
 
     if (!this.doorRelayPin) throw new Error("You must provide a config value for 'doorRelayPin'.");
     if (!this.doorSensorPin) throw new Error("You must provide a config value for 'doorSensorPin'.");
@@ -34,18 +37,15 @@ function GarageDoorOpener(log, config) {
 
     this.log("Creating a garage door relay named '%s', initial state: %s", this.name, (this.invertDoorState ? "OPEN" : "CLOSED"));
 
-    this.relayGpio = new Gpio(this.doorRelayPin, 'out');
-    this.relayGpio.writeSync(this.gpioDoorVal(this.invertDoorState));
-
-    this.sensorGpio = new Gpio(this.doorSensorPin, 'in', 'both', {
-        bias: this.translatePullConfig(this.pullConfig)
-    });
-
-    // Clean up GPIO on process exit
-    process.on('exit', () => {
-        this.relayGpio.unexport();
-        this.sensorGpio.unexport();
-    });
+    // Configure sensor pull resistor via pinctrl (Raspberry Pi, works on Pi 5)
+    if (this.pullConfig !== 'none') {
+        try {
+            const pullFlag = this.pullConfig === 'up' ? 'pu' : 'pd';
+            execSync(`pinctrl set ${this.doorSensorPin} ip ${pullFlag}`, { stdio: 'pipe' });
+        } catch (e) {
+            this.log.warn('Could not configure pull resistor via pinctrl (install rpi-utils if needed): ' + e.message.split('\n')[0]);
+        }
+    }
 
     this.checkSensor(e => {});
 }
@@ -89,9 +89,9 @@ GarageDoorOpener.prototype.getSensorStatusAsync = function () {
 }
 
 GarageDoorOpener.prototype.checkSensor = function (callback) {
-    setTimeout(e => {
+    setTimeout(() => {
         this.doorState = this.readSensorState();
-        if (this.doorState !== this.sensorChange) {
+        if (this.service && this.doorState !== this.sensorChange) {
             this.service.getCharacteristic(TargetDoorState).updateValue(this.doorState);
             this.service.getCharacteristic(CurrentDoorState).updateValue(this.doorState);
             this.sensorChange = this.doorState;
@@ -103,13 +103,29 @@ GarageDoorOpener.prototype.checkSensor = function (callback) {
 }
 
 GarageDoorOpener.prototype.readSensorState = function () {
-    var raw = this.sensorGpio.readSync();
-    var val = this.gpioSensorVal(raw);
-    return val === 1 ? 1 : 0; // closed / opened
+    try {
+        var raw = parseInt(
+            execSync(`gpioget ${this.gpiochip} ${this.doorSensorPin}`, { timeout: 1000 }).toString().trim(),
+            10
+        );
+        var val = this.gpioSensorVal(raw);
+        return val === 1 ? 1 : 0;
+    } catch (e) {
+        this.log.error('gpioget sensor error: ' + e.message.split('\n')[0]);
+        return this.doorState;
+    }
 }
 
-GarageDoorOpener.prototype.setState = function (val) {
-    this.relayGpio.writeSync(this.gpioDoorVal(val));
+// Pulse the relay for duration_ms using gpioset -m time (async, non-blocking)
+GarageDoorOpener.prototype.setState = function (activate) {
+    if (!activate) return; // gpioset -m time releases the line automatically after the pulse
+    var gpioVal = this.gpioDoorVal(1);
+    var durationUs = (this.duration > 0 ? this.duration : 500) * 1000;
+    exec(`gpioset -m time -u ${durationUs} ${this.gpiochip} ${this.doorRelayPin}=${gpioVal}`,
+        { timeout: durationUs / 1000 + 5000 },
+        (err) => {
+            if (err && !err.killed) this.log.error('gpioset relay error: ' + err.message.split('\n')[0]);
+        });
 }
 
 // Homebridge 1.x: callback-based set handler
@@ -121,18 +137,7 @@ GarageDoorOpener.prototype.setDoorState = function (newState, callback) {
         callback(null);
         return;
     }
-
-    if (this.timerid !== -1) {
-        clearTimeout(this.timerid);
-        this.timerid = -1;
-    }
-
     this.setState(1);
-
-    if (this.duration > 0) {
-        this.timerid = setTimeout(this.timeOutCB, this.duration, this);
-    }
-
     callback(null);
 }
 
@@ -144,24 +149,8 @@ GarageDoorOpener.prototype.setDoorStateAsync = function (newState) {
         this.log("Already in requested state, doing nothing.");
         return Promise.resolve();
     }
-
-    if (this.timerid !== -1) {
-        clearTimeout(this.timerid);
-        this.timerid = -1;
-    }
-
     this.setState(1);
-
-    if (this.duration > 0) {
-        this.timerid = setTimeout(this.timeOutCB, this.duration, this);
-    }
-
     return Promise.resolve();
-}
-
-GarageDoorOpener.prototype.timeOutCB = function (o) {
-    o.setState(0);
-    o.timerid = -1;
 }
 
 GarageDoorOpener.prototype.gpioSensorVal = function (val) {
@@ -172,12 +161,6 @@ GarageDoorOpener.prototype.gpioSensorVal = function (val) {
 GarageDoorOpener.prototype.gpioDoorVal = function (val) {
     if (this.invertDoorState) val = !val;
     return val ? 0 : 1; // reversed logic
-}
-
-GarageDoorOpener.prototype.translatePullConfig = function (val) {
-    if (val == "up") return 'pull-up';
-    else if (val == "down") return 'pull-down';
-    else return 'disable';
 }
 
 var is_int = function (n) {
