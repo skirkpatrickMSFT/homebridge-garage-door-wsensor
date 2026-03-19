@@ -31,16 +31,19 @@ npm install -g homebridge-garage-door-wsensor
 ### Option 3: Install directly from GitHub (recommended for this fork)
 
 ```bash
-cd /var/lib/homebridge
-sudo npm install skirkpatrickMSFT/homebridge-garage-door-wsensor
+cd /var/lib/homebridge/node_modules
+sudo git clone https://github.com/skirkpatrickMSFT/homebridge-garage-door-wsensor.git
+cd homebridge-garage-door-wsensor
+sudo npm install
 sudo hb-service restart
 ```
 
 To update to the latest version from GitHub later:
 
 ```bash
-cd /var/lib/homebridge
-sudo npm install skirkpatrickMSFT/homebridge-garage-door-wsensor
+cd /var/lib/homebridge/node_modules/homebridge-garage-door-wsensor
+sudo git pull
+sudo npm install
 sudo hb-service restart
 ```
 
