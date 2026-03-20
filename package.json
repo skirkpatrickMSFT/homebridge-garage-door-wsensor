@@ -1,5 +1,5 @@
 {
-  "name": "homebridge-garage-door-wsensor",
+  "name": "homebridge-garage-door-wsensor-pi5-and-before",
   "displayName": "Garage Door Opener with Sensor",
   "version": "2.1.0",
   "description": "Homebridge plugin for Garage Door Opener - Raspberry Pi",
@@ -20,10 +20,10 @@
   "devDependencies": {},
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/skirkpatrickMSFT/homebridge-garage-door-wsensor.git"
+    "url": "git+https://github.com/skirkpatrickMSFT/homebridge-garage-door-wsensor-pi5-and-before.git"
   },
   "bugs": {
-    "url": "https://github.com/skirkpatrickMSFT/homebridge-garage-door-wsensor/issues"
+    "url": "https://github.com/skirkpatrickMSFT/homebridge-garage-door-wsensor-pi5-and-before/issues"
   },
-  "homepage": "https://github.com/skirkpatrickMSFT/homebridge-garage-door-wsensor#readme"
+  "homepage": "https://github.com/skirkpatrickMSFT/homebridge-garage-door-wsensor-pi5-and-before#readme"
 }
