@@ -108,11 +108,11 @@ Example of where it fits inside `config.json`:
 | `name`             | string  | Yes      | —       | Name of the accessory as it appears in HomeKit |
 | `doorRelayPin`     | integer | Yes      | —       | **BCM** GPIO number connected to the relay (see pin map below) |
 | `doorSensorPin`    | integer | Yes      | —       | **BCM** GPIO number connected to the door sensor (see pin map below) |
-| `duration_ms`      | integer | No       | `500`   | How long (in milliseconds) to pulse the relay. `500` is a safe default for most garage openers |
+| `duration_ms`      | integer | No       | `200`   | How long (in milliseconds) to pulse the relay. `200`–`500` ms works for most garage openers |
 | `invertDoorState`  | boolean | No       | `false` | Invert the relay output logic (HIGH/LOW) for the door |
 | `invertSensorState`| boolean | No       | `false` | Invert the sensor reading logic |
 | `input_pull`       | string  | No       | `"none"`| Pull resistor for sensor pin: `"up"`, `"down"`, or `"none"` (configured via `pinctrl`) |
-| `gpiochip`         | string  | No       | auto    | GPIO chip device. Auto-detected at startup (Pi 4 = `gpiochip0`, Pi 5 = `gpiochip4`). Override only if auto-detection fails |
+| `gpiochip`         | string  | No       | auto    | GPIO chip device. Auto-detected at startup by scanning `gpiodetect` output for `pinctrl`. Override only if auto-detection fails |
 
 ---
 
@@ -124,18 +124,18 @@ The Pi 5 uses the **RP1** I/O controller which breaks compatibility with older G
 
 | | Pi 4 | Pi 5 |
 |---|---|---|
-| GPIO chip | `gpiochip0` | `gpiochip4` |
-| GPIO interface | `/sys/class/gpio` or `/dev/gpiochip0` | `/dev/gpiochip4` only (sysfs removed) |
+| GPIO chip | `gpiochip0` | `gpiochip0` |
+| GPIO interface | `/sys/class/gpio` or `/dev/gpiochip0` | `/dev/gpiochip0` only (sysfs removed) |
 | gpiod version | v1 (Bullseye) or v2 (Bookworm) | v2 (Bookworm) |
 | Pull resistors | `raspi-gpio` or `pigpio` | `pinctrl` |
 
 This plugin auto-detects all of the above at startup. You'll see log lines like:
 ```
-[Garage Door] Auto-detected GPIO chip: gpiochip4
-[Garage Door] gpiod version: v2+
+[Garage Door] Auto-detected GPIO chip: gpiochip0
+[Garage Door] gpiod syntax: v2 (default)  chip: gpiochip0  sensor cmd: gpioget -c gpiochip0 23
 ```
 
-If auto-detection picks the wrong chip, add `"gpiochip": "gpiochip4"` to your config to force it.
+If auto-detection picks the wrong chip, add `"gpiochip": "gpiochip0"` (or the correct chip name) to your config to force it.
 
 ---
 
@@ -247,7 +247,7 @@ sudo journalctl -fu homebridge
 - **Relay fires but door doesn't move** — Check your wiring and try toggling `invertDoorState`.
 - **Sensor always shows wrong state** — Try toggling `invertSensorState` or changing `input_pull`.
 - **Permission denied on GPIO** — Run Homebridge as root or add the user to the `gpio` and `dialout` groups: `sudo usermod -aG gpio,dialout $USER`. The `gpiod` tools typically require either root or membership in the `gpio` group.
-- **Wrong chip number** — Run `gpiodetect` on the Pi to list available chips. Pi 5 reports `gpiochip4 [pinctrl-rp1]`. Force it with `"gpiochip": "gpiochip4"` in your config.
+- **Wrong chip number** — Run `gpiodetect` on the Pi to list available chips. Pi 5 with Bookworm reports `gpiochip0 [pinctrl-rp1]`. Force it with `"gpiochip": "gpiochip0"` in your config.
 - **`gpioget: command not found`** — Install the gpiod tools: `sudo apt install gpiod` (usually pre-installed on Bookworm/Pi 5).
 - **Pin numbering** — Always use **BCM** numbers, not physical board pin numbers. Physical pin 16 = BCM 23, physical pin 24 = BCM 8.
 
