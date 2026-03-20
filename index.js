@@ -176,15 +176,17 @@ GarageDoorOpener.prototype.setState = function (activate) {
     if (!activate) return;
     var ms = this.duration > 0 ? this.duration : 200;
     var seconds = (ms / 1000).toFixed(3);
+    var chip = this.gpiochip;
+    var pin = this.doorRelayPin;
+    // Pi 5 / gpiod v2: pin holds its last value after process exits, so we must
+    // explicitly drive HIGH after the pulse. Background gpioset (LOW), sleep,
+    // kill it, then drive HIGH to release the relay.
     var cmd = this.legacyGpiod
-        ? `gpioset -m time -u ${ms * 1000} ${this.gpiochip} ${this.doorRelayPin}=0`
-        : `timeout ${seconds} gpioset -c ${this.gpiochip} ${this.doorRelayPin}=0`;
+        ? `gpioset -m time -u ${ms * 1000} ${chip} ${pin}=0`
+        : `sh -c "gpioset -c ${chip} ${pin}=0 & sleep ${seconds}; kill $! 2>/dev/null; gpioset -c ${chip} ${pin}=1"`;
     this.log("Relay pulse: %s", cmd);
-    exec(cmd, { timeout: ms + 3000 }, (err) => {
-        if (err && err.code !== null && err.code !== 124) {
-            // code 124 = timeout killed the process (expected/normal)
-            this.log.error('gpioset relay error: ' + err.message.split('\n')[0]);
-        }
+    exec(cmd, { timeout: ms + 5000 }, (err) => {
+        if (err) this.log.error('gpioset relay error: ' + err.message.split('\n')[0]);
     });
 }
 
