@@ -1,0 +1,68 @@
+{
+  "pluginAlias": "Garage Door Opener",
+  "pluginType": "accessory",
+  "singular": false,
+  "strictValidation": false,
+  "schema": {
+    "type": "object",
+    "required": ["name", "doorRelayPin", "doorSensorPin"],
+    "additionalProperties": false,
+    "properties": {
+      "name": {
+        "title": "Accessory Name",
+        "type": "string",
+        "default": "Garage Door"
+      },
+      "doorRelayPin": {
+        "title": "Relay GPIO Pin (BCM)",
+        "type": "integer",
+        "description": "BCM GPIO number connected to the relay (e.g. 8 = physical pin 24)"
+      },
+      "doorSensorPin": {
+        "title": "Sensor GPIO Pin (BCM)",
+        "type": "integer",
+        "description": "BCM GPIO number connected to the door sensor (e.g. 23 = physical pin 16)"
+      },
+      "duration_ms": {
+        "title": "Relay Pulse Duration (ms)",
+        "type": "integer",
+        "default": 200,
+        "description": "How long to pulse the relay in milliseconds. 200-500ms works for most garage openers."
+      },
+      "gpiochip": {
+        "title": "GPIO Chip (optional)",
+        "type": "string",
+        "description": "GPIO chip device name e.g. gpiochip0. Leave blank to auto-detect."
+      },
+      "input_pull": {
+        "title": "Sensor Pull Resistor",
+        "type": "string",
+        "default": "none",
+        "oneOf": [
+          { "title": "None", "enum": ["none"] },
+          { "title": "Pull Up", "enum": ["up"] },
+          { "title": "Pull Down", "enum": ["down"] }
+        ],
+        "description": "Internal pull resistor for the sensor pin."
+      },
+      "invertSensorState": {
+        "title": "Invert Sensor State",
+        "type": "boolean",
+        "default": false,
+        "description": "Invert the sensor reading (open/closed)."
+      },
+      "invertDoorState": {
+        "title": "Invert Door Relay State",
+        "type": "boolean",
+        "default": false,
+        "description": "Invert the relay output logic (HIGH/LOW)."
+      },
+      "legacyGpiod": {
+        "title": "Legacy gpiod v1 Mode",
+        "type": "boolean",
+        "default": false,
+        "description": "Enable only on Pi 4 or older systems running gpiod v1 (Bullseye). Leave off for Pi 5 / Bookworm."
+      }
+    }
+  }
+}
