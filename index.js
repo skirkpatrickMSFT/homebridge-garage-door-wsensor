@@ -2,7 +2,7 @@ var Service, Characteristic, TargetDoorState, CurrentDoorState;
 const { execSync, exec } = require('child_process');
 
 // Auto-detect the GPIO chip that represents the 40-pin header.
-// Pi 4 -> gpiochip0 [pinctrl-bcm2711], Pi 5 -> gpiochip4 [pinctrl-rp1]
+// Pi 4 uses gpiochip0 [pinctrl-bcm2711]; Pi 5 also uses gpiochip0 [pinctrl-rp1] on Bookworm.
 function detectGpioChip(log) {
     try {
         var output = execSync('gpiodetect', { timeout: 2000 }).toString();
@@ -26,7 +26,6 @@ module.exports = function (homebridge) {
     Characteristic = homebridge.hap.Characteristic;
     TargetDoorState = Characteristic.TargetDoorState;
     CurrentDoorState = Characteristic.CurrentDoorState;
-    DoorState = homebridge.hap.Characteristic.CurrentDoorState;
     homebridge.registerAccessory('homebridge-garage-door-wsensor', 'Garage Door Opener', GarageDoorOpener);
 }
 
@@ -37,11 +36,8 @@ function GarageDoorOpener(log, config) {
     this.name = config.name;
     this.doorRelayPin = config.doorRelayPin;
     this.doorSensorPin = config.doorSensorPin;
-    this.currentDoorState = 0;
-    this.targetDoorState = 0;
     this.invertDoorState = defaultVal(config["invertDoorState"], false);
     this.invertSensorState = defaultVal(config['invertSensorState'], false);
-    this.default = defaultVal(config["default_state"], false);
     this.duration = defaultVal(config["duration_ms"], 200);
     this.pullConfig = defaultVal(config["input_pull"], "none");
     this.gpiochip = defaultVal(config["gpiochip"], null); // null = auto-detect
@@ -168,9 +164,9 @@ GarageDoorOpener.prototype.readSensorState = function () {
     }
 }
 
-// Pulse relay using 'timeout' to hold the line for duration_ms then release.
-// 'timeout Ns gpioset -c chip pin=0' blocks gpioset for N seconds then kills
-// it, which releases the GPIO line. Works reliably with all gpiod v2 builds.
+// Pulse relay: drives pin LOW (relay ON) for duration_ms, then explicitly drives
+// HIGH (relay OFF). Pi 5 / gpiod v2 holds the last pin value after process exit,
+// so a second gpioset command is required to release the relay.
 // v1 fallback uses -m time -u <microseconds>.
 GarageDoorOpener.prototype.setState = function (activate) {
     if (!activate) return;
@@ -220,11 +216,6 @@ GarageDoorOpener.prototype.setDoorStateAsync = function (newState) {
 GarageDoorOpener.prototype.gpioSensorVal = function (val) {
     if (this.invertSensorState) val = !val;
     return val ? 1 : 0;
-}
-
-GarageDoorOpener.prototype.gpioDoorVal = function (val) {
-    if (this.invertDoorState) val = !val;
-    return val ? 0 : 1; // active-LOW relay: 0=trigger, 1=release
 }
 
 var is_int = function (n) {
